@@ -80,6 +80,25 @@
 
 返回中的 `data.messages` 为过滤后的消息列表，`data.last_message_id` 可作为下一轮轮询游标。
 
+## Open Web URL
+
+`project-manager web` 的 `Open Web` 按钮会把以下三项拼成链接：
+
+- `base_url`
+- `directory`
+- `session_id`
+
+路径规则：
+
+```text
+/{base64url(directory)}/session/{session_id}?directory=<directory>
+```
+
+这个 skill 的 `scripts/emit_opencode_entrypoints.py` 会直接输出：
+
+- `Open Web`
+- `Session`
+
 ## 注意
 
 - 旧文档里提到的 `pm_resolve_instance` / `pm_create_task_instance` 不再作为本 skill 的调用依据。

@@ -11,24 +11,21 @@
 3. task 名固定为 `issue-<工单号>`。
 4. 默认 branch prefix 是 `fix`。
 5. 若项目映射失败，必须停下来请求确认。
-6. 若用户要求过程同步，Hermes 必须定期拉取 OpenCode session 增量消息，并整理成中文进度摘要同步给用户。
-7. 完成开发后，Hermes 必须先把 OpenCode 的结果整理成中文审查摘要给用户。
-8. 只有在用户明确确认效果后，才允许执行 `commit -> merge -> push`。
+6. 默认只创建 OpenCode session 并发出 `plan mode` 首条消息，不做过程同步。
+7. Hermes 必须返回两个入口，分开展示：`Open Web` 与 `Session`。
+8. 只有用户之后明确要求继续由 Hermes 执行开发时，才进入审查、测试确认与提交阶段。
 
 ## 输出阶段
 
-### 阶段 A：开发完成
+### 阶段 A：Plan Handoff
 
 应向用户汇报：
 
 - 目标项目
 - task/worktree 信息
-- OpenCode 结论
-- OpenCode 分析
-- OpenCode 修改内容
-- 已执行的本地验证
-- 剩余风险
-- 明确提醒现在等待用户审查与测试确认
+- Open Web
+- Session
+- 明确说明当前 session 已经以 `plan mode` 打开
 
 ### 阶段 A-1：过程同步
 
