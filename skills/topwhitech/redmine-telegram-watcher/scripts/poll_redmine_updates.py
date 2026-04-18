@@ -55,9 +55,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_projects() -> list[str]:
+def load_watch_config() -> dict[str, list[str]]:
     payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    return [str(item) for item in payload.get("projects", []) if str(item)]
+    return {
+        "projects": [str(item) for item in payload.get("projects", []) if str(item)],
+        "priority_whitelist": [
+            str(item) for item in payload.get("priority_whitelist", []) if str(item)
+        ],
+        "status_whitelist": [
+            str(item) for item in payload.get("status_whitelist", []) if str(item)
+        ],
+    }
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -146,13 +154,24 @@ def normalize_issue(issue: dict[str, Any], base_url: str) -> dict[str, str]:
 
 
 def filter_issues(
-    issues: list[dict[str, Any]], base_url: str, projects: list[str]
+    issues: list[dict[str, Any]],
+    base_url: str,
+    projects: list[str],
+    priority_whitelist: list[str],
+    status_whitelist: list[str],
 ) -> list[dict[str, str]]:
     allowed = set(projects)
+    allowed_priorities = set(priority_whitelist)
+    allowed_statuses = set(status_whitelist)
     return [
         normalized
         for normalized in (normalize_issue(issue, base_url) for issue in issues)
-        if normalized["project"] in allowed and normalized["id"]
+        if normalized["project"] in allowed
+        and normalized["id"]
+        and (
+            normalized["priority"] in allowed_priorities
+            or normalized["status"] in allowed_statuses
+        )
     ]
 
 
@@ -221,7 +240,7 @@ def main() -> int:
         return 0
 
     state_path = Path(args.state_file).expanduser().resolve()
-    projects = load_projects()
+    watch_config = load_watch_config()
     try:
         issues = fetch_issues(args.base_url, args.api_key)
     except ValueError as exc:
@@ -234,7 +253,13 @@ def main() -> int:
         print(f"Redmine request failed: {exc}", file=sys.stderr)
         return 4
 
-    current = filter_issues(issues, args.base_url, projects)
+    current = filter_issues(
+        issues,
+        args.base_url,
+        watch_config["projects"],
+        watch_config["priority_whitelist"],
+        watch_config["status_whitelist"],
+    )
     state = load_state(state_path)
 
     updates = collect_updates(current, state)

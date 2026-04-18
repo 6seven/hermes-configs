@@ -13,3 +13,8 @@
 
 - 没有读到 `README`、清单文件、CI、`opencode.json` 或其他仓库内指令文件；仓库内缺少依据时，不要编造命令、流程或架构说明。
 - 若要补充仓库结构，优先采用最小目录和最少文件，围绕 `hermes-agent` 配置本身组织，而不是预先搭建通用工程脚手架。
+
+# 已落地配置
+
+- `skills/topwhitech/redmine-telegram-watcher/` 已用于轮询“指派给我”的 Redmine 工单；当前默认只推送 `AP`、`APT` 中优先级为 `High/Urgent/Immediate` 或状态为 `Failed Test不通过` 的增量。
+- 当前用户 crontab 已安装 5 分钟轮询任务；若要调整频率或命令，先检查 `crontab -l` 中的 `redmine-telegram-watcher` 行，避免重复写入。

@@ -1,6 +1,6 @@
 ---
 name: redmine-telegram-watcher
-description: 轮询指派给我的 Redmine 工单，并在 AP/APT 项目内按 updated_on 发现增量后推送到 Telegram 私聊，不调用任何模型。
+description: 轮询指派给我的 Redmine 工单，并在 AP/APT 项目内只推送高优先级或 Failed Test不通过 的 updated_on 增量到 Telegram 私聊，不调用任何模型。
 version: 0.1.0
 author: dwolf
 license: MIT
@@ -37,6 +37,7 @@ metadata:
 
 - 需要定时检查“指派给我”的 Redmine 工单更新
 - 只保留项目 `AP`、`APT`
+- 默认只推送高优先级或 `Failed Test不通过`
 - 增量定义只看 `updated_on`
 - 发现增量后推送到 Telegram 私聊
 - 不希望调用任何模型，不消耗 token
@@ -103,11 +104,14 @@ python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmi
 1. 读取本地状态文件，默认是 `~/.hermes_redmine_watcher_state.json`。
 2. 请求 Redmine 中“指派给我”的 issue 列表。
 3. 仅保留项目名为 `AP`、`APT` 的工单。
-4. 对每条工单提取 `id`、`subject`、`status`、`priority`、`updated_on`。
-5. 用 `issue_id + updated_on` 判断是否是新增版本。
-6. 首次运行若带 `--bootstrap`，只写基线，不发通知。
-7. 非 bootstrap 模式下，对增量工单逐条发 Telegram 文本消息。
-8. 推送成功后更新状态文件。
+4. 再按 `config/watch_projects.json` 过滤：
+   - `priority_whitelist`
+   - `status_whitelist`
+5. 对每条工单提取 `id`、`subject`、`status`、`priority`、`updated_on`。
+6. 用 `issue_id + updated_on` 判断是否是新增版本。
+7. 首次运行若带 `--bootstrap`，只写基线，不发通知。
+8. 非 bootstrap 模式下，对增量工单逐条发 Telegram 文本消息。
+9. 推送成功后更新状态文件。
 
 ## Message Format
 
@@ -124,7 +128,7 @@ python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmi
 ## Pitfalls
 
 - 这个 watcher 不调用任何模型；不要在轮询脚本里加 LLM 摘要逻辑。
-- 默认只看“指派给我”的工单，且只保留 `AP`、`APT`；如果未来扩展监控项目，优先改 `config/watch_projects.json`。
+- 默认只看“指派给我”的工单，且只保留 `AP`、`APT` 中高优先级或 `Failed Test不通过`；如果未来扩展规则，优先改 `config/watch_projects.json`。
 - 默认首次执行应使用 `--bootstrap`，避免把历史工单全部推到 Telegram。
 - 推送目标优先取 `TELEGRAM_CHAT_ID`，没有再回退到 `TELEGRAM_HOME_CHANNEL`。
 
@@ -140,6 +144,6 @@ python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmi
 成功标准：
 
 - 能从 Redmine 拉到工单列表
-- 只保留 `AP`、`APT`
+- 只保留符合项目与优先级/状态白名单的工单
 - dry-run 能输出增量工单摘要
 - Telegram 测试消息能送达
