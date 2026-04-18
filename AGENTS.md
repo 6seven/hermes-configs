@@ -16,5 +16,5 @@
 
 # 已落地配置
 
-- `skills/topwhitech/redmine-telegram-watcher/` 已用于轮询“指派给我”的 Redmine 工单；当前默认只推送 `AP`、`APT` 中优先级为 `High/Urgent/Immediate` 或状态为 `Failed Test不通过` 的增量。
-- 当前用户 crontab 已安装 5 分钟轮询任务；若要调整频率或命令，先检查 `crontab -l` 中的 `redmine-telegram-watcher` 行，避免重复写入。
+- `skills/topwhitech/redmine-telegram-watcher/` 已用于轮询“指派给我”的 Redmine 工单；当前默认推送 `AP`、`APT` 中所有 `updated_on` 发生变化的增量，避免漏消息。
+- 当前用户 crontab 已安装 5 分钟轮询任务，并通过 `run_redmine_watcher_cron.sh` 写入按天日志；脚本会自动清理 30 天前旧日志。若要调整频率或命令，先检查 `crontab -l` 中的 `redmine-telegram-watcher` 行，避免重复写入。

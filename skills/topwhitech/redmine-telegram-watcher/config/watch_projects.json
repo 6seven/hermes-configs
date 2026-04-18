@@ -2,13 +2,5 @@
   "projects": [
     "AP",
     "APT"
-  ],
-  "priority_whitelist": [
-    "High",
-    "Urgent",
-    "Immediate"
-  ],
-  "status_whitelist": [
-    "Failed Test不通过"
   ]
 }

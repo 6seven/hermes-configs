@@ -6,8 +6,10 @@ import argparse
 import http.client
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -22,6 +24,9 @@ DEFAULT_STATE_FILE = Path.home() / ".hermes_redmine_watcher_state.json"
 DEFAULT_BASE_URL = os.environ.get(
     "REDMINE_BASE_URL", "https://apredmine.topwhitech.com"
 )
+REQUEST_TIMEOUT_SECONDS = 20
+MAX_REQUEST_ATTEMPTS = 5
+RETRY_BACKOFF_SECONDS = 2
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,13 +63,7 @@ def parse_args() -> argparse.Namespace:
 def load_watch_config() -> dict[str, list[str]]:
     payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     return {
-        "projects": [str(item) for item in payload.get("projects", []) if str(item)],
-        "priority_whitelist": [
-            str(item) for item in payload.get("priority_whitelist", []) if str(item)
-        ],
-        "status_whitelist": [
-            str(item) for item in payload.get("status_whitelist", []) if str(item)
-        ],
+        "projects": [str(item) for item in payload.get("projects", []) if str(item)]
     }
 
 
@@ -90,11 +89,33 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     path.write_text(json.dumps(state, ensure_ascii=True, indent=2), encoding="utf-8")
 
 
+def fetch_json_with_retry(request: Request) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
+        try:
+            with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (
+            http.client.IncompleteRead,
+            http.client.RemoteDisconnected,
+            TimeoutError,
+            socket.timeout,
+            URLError,
+        ) as exc:
+            last_error = exc
+            if attempt == MAX_REQUEST_ATTEMPTS:
+                break
+            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+    if last_error:
+        raise last_error
+    raise ValueError("Empty Redmine response")
+
+
 def fetch_issues(base_url: str, api_key: str) -> list[dict[str, Any]]:
     if not api_key:
         raise ValueError("Missing REDMINE_API_KEY")
     offset = 0
-    limit = 50
+    limit = 25
     issues: list[dict[str, Any]] = []
     while True:
         query = urlencode(
@@ -103,29 +124,14 @@ def fetch_issues(base_url: str, api_key: str) -> list[dict[str, Any]]:
                 "offset": offset,
                 "status_id": "*",
                 "assigned_to_id": "me",
+                "sort": "updated_on:desc",
             }
         )
         request = Request(
             f"{base_url.rstrip('/')}/issues.json?{query}",
             headers={"Accept": "application/json", "X-Redmine-API-Key": api_key},
         )
-        payload: dict[str, Any] | None = None
-        last_error: Exception | None = None
-        for _ in range(5):
-            try:
-                with urlopen(request, timeout=30) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                break
-            except (
-                http.client.IncompleteRead,
-                http.client.RemoteDisconnected,
-                URLError,
-            ) as exc:
-                last_error = exc
-        if payload is None:
-            if last_error:
-                raise last_error
-            raise ValueError("Empty Redmine response")
+        payload = fetch_json_with_retry(request)
         batch = payload.get("issues", [])
         if not isinstance(batch, list):
             raise ValueError("Unexpected Redmine response: issues is not a list")
@@ -157,21 +163,12 @@ def filter_issues(
     issues: list[dict[str, Any]],
     base_url: str,
     projects: list[str],
-    priority_whitelist: list[str],
-    status_whitelist: list[str],
 ) -> list[dict[str, str]]:
     allowed = set(projects)
-    allowed_priorities = set(priority_whitelist)
-    allowed_statuses = set(status_whitelist)
     return [
         normalized
         for normalized in (normalize_issue(issue, base_url) for issue in issues)
-        if normalized["project"] in allowed
-        and normalized["id"]
-        and (
-            normalized["priority"] in allowed_priorities
-            or normalized["status"] in allowed_statuses
-        )
+        if normalized["project"] in allowed and normalized["id"]
     ]
 
 
@@ -257,8 +254,6 @@ def main() -> int:
         issues,
         args.base_url,
         watch_config["projects"],
-        watch_config["priority_whitelist"],
-        watch_config["status_whitelist"],
     )
     state = load_state(state_path)
 
