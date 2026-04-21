@@ -21,6 +21,7 @@ PMGR_CLIENT = (
 PROJECT_MAP = (
     SKILL_DIR.parent / "redmine-pmgr-opencode" / "config" / "project_map.json"
 )
+DEFAULT_PROJECT_REF = "appoker"
 BUILD_REMINDER = """<system-reminder>
 Your operational mode has changed from plan to build.
 You are no longer in read-only mode.
@@ -125,10 +126,10 @@ def build_message(project_ref: str, issue_ids_csv: str, command: str) -> str:
     )
 
 
-def build_title(project_key: str, issue_ids: list[str]) -> str:
+def build_title(label: str, issue_ids: list[str]) -> str:
     preview = ",".join(issue_ids[:3])
     suffix = "..." if len(issue_ids) > 3 else ""
-    return f"batch-mtu {project_key} {preview}{suffix}"
+    return f"batch-mtu {label} {preview}{suffix}"
 
 
 def base64url_encode(value: str) -> str:
@@ -151,15 +152,21 @@ def main() -> int:
     args = parse_args()
     try:
         parsed = parse_url(read_input(args))
-        project_key = str(parsed["project_key"])
+        source_type = str(parsed["source_type"])
+        project_key = (
+            str(parsed["project_key"])
+            if isinstance(parsed.get("project_key"), str) and parsed.get("project_key")
+            else ""
+        )
         issue_ids = [str(item) for item in parsed["issue_ids"]]
         issue_ids_csv = str(parsed["issue_ids_csv"])
-        project_ref = load_project_map().get(project_key)
-        if not project_ref:
+        project_ref = load_project_map().get(project_key) if project_key else DEFAULT_PROJECT_REF
+        if project_key and not project_ref:
             raise ValueError(f"No pmgr project mapping found for Redmine project: {project_key}")
-        command = f"mtu {issue_ids_csv}"
+        command = f"/mtu {issue_ids_csv}"
         result: dict[str, Any] = {
             "mode": "preview",
+            "source_type": source_type,
             "redmine_project": project_key,
             "pmgr_project": project_ref,
             "issue_ids": issue_ids,
@@ -187,7 +194,7 @@ def main() -> int:
             "--directory",
             directory,
             "--title",
-            build_title(project_key, issue_ids),
+            build_title(project_key or project_ref, issue_ids),
         )
         session_id = get_session_id(session_payload)
         send_payload = run_pmgr(
