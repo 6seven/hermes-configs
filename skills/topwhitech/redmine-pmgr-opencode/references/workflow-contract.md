@@ -12,7 +12,7 @@
 4. 默认 branch prefix 是 `fix`。
 5. 若项目映射失败，必须停下来请求确认。
 6. 默认只创建 OpenCode session 并发出 `plan mode` 首条消息，不做过程同步。
-7. Hermes 必须返回两个入口，分开展示：`Open Web` 与 `Session`。
+7. Hermes 必须返回两个入口，分开展示：`Open Web` 与 `Session`，其中本地入口使用 `pmgr session <session_id>`。
 8. 只有用户之后明确要求继续由 Hermes 执行开发时，才进入审查、测试确认与提交阶段。
 
 ## 输出阶段

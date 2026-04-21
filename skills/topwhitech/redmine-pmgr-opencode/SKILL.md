@@ -39,10 +39,12 @@ metadata:
 
 ## When to Use
 
-- 用户给出 Redmine 工单链接，希望基于工单内容自动推进开发流程
+- 用户给出单个 Redmine 工单链接，希望基于工单内容自动推进开发流程
+- 只处理形如 `https://apredmine.topwhitech.com/issues/<id>` 的单工单链接
+- 如果输入是 Redmine 列表链接 `/projects/<project>/issues?...`，应改走 `redmine-batch-mtu`
 - 需要先解析工单描述和附件，再决定映射到哪个 `pmgr` 项目
 - 需要先把工单整理后交给 OpenCode 的 `plan mode`
-- 需要直接返回 Open Web 链接和本地 `opencode -s <session_id>` 入口
+- 需要直接返回 Open Web 链接和本地 `pmgr session <session_id>` 入口
 
 ## References
 
@@ -148,7 +150,9 @@ bash /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-
 
 ## Procedure
 
-1. 从用户消息中提取 Redmine 工单 URL；若没有合法工单 URL，不要猜测。
+1. 从用户消息中提取单个 Redmine 工单 URL；若没有合法单工单 URL，不要猜测。
+   - 只接受 `https://apredmine.topwhitech.com/issues/<id>` 这类链接。
+   - 如果输入是 `/projects/<project>/issues?...`、包含 `issue_id=` 或 `v[issue_id][]=` 的列表链接，不要进入本 skill，应改走 `redmine-batch-mtu`。
 2. 运行 `fetch_redmine_issue.py`，拿到：
    - 工单 id、标题、描述、项目名、状态、优先级
    - 附件元数据
@@ -177,9 +181,9 @@ bash /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-
    调用消息接口时，payload 必须使用 `parts` 数组，而不是简单的 `message` 字符串。
 9. session 建好并发出 `plan mode` 消息后，Hermes 直接返回两段内容，分开展示：
    - `Open Web`：对应 project-manager web 按钮打开的链接
-   - `Session`：`opencode -s <session_id>`
+   - `Session`：`pmgr session <session_id>`
 10. 默认不再同步轮询 OpenCode 过程消息；`watch_*` 脚本只作为调试工具保留。
-11. 后续开发默认由用户在 Open Web 或本地 `opencode -s <session_id>` 中继续推进。
+11. 后续开发默认由用户在 Open Web 或本地 `pmgr session <session_id>` 中继续推进。
 12. 若用户之后要求继续由 Hermes 收尾，再回到审查、测试确认、提交流程。
 13. 在用户明确确认效果前，不要执行 `git commit`、`pmgr merge` 或 `git push`。
 14. 用户确认后，再执行：
@@ -222,6 +226,7 @@ Rules:
 - 当前主流程默认不做过程同步；`watch_*` 脚本只作为调试工具保留。
 - 若 `project-manager` 或共享 OpenCode 服务未启动，要先说明阻塞原因，不要继续编造结果。
 - Redmine 附件可能是图片或二进制文件；无法解析时必须显式列出，不要假装已读取内容。
+- 如果用户贴的是 Redmine 工单列表链接，而不是单工单链接，应切到 `redmine-batch-mtu`，不要在这里猜第一个工单或拆列表处理。
 - 工单映射失败时，必须停下来让用户确认目标项目。
 - 当前主流程默认只做到 session 入口交接；如果用户要求继续由 Hermes 执行开发，再进入后续审查与提交流程。
 

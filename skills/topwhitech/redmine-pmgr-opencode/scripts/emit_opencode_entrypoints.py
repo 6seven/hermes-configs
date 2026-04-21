@@ -38,7 +38,7 @@ def main() -> int:
     print(open_web)
     print()
     print("Session:")
-    print(f"opencode -s {args.session_id}")
+    print(f"pmgr session {args.session_id}")
     return 0
 
 
