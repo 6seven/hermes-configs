@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, urlencode, urlparse, urlunparse
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -31,12 +34,20 @@ if str(SCRIPT_DIR) not in sys.path:
 from parse_redmine_issue_list import parse_url  # noqa: E402
 
 
+DEFAULT_OPENCODE_BASE_URL = os.environ.get("OPENCODE_BASE_URL", "http://175.178.89.45:4100")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve a Redmine issues URL and execute mtu in a main-branch OpenCode session."
     )
     parser.add_argument("--input-text", help="Raw pasted input text")
     parser.add_argument("--input-file", help="Read raw input text from file")
+    parser.add_argument(
+        "--opencode-base-url",
+        default=DEFAULT_OPENCODE_BASE_URL,
+        help="OpenCode shared server base URL for Open Web links",
+    )
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -120,6 +131,22 @@ def build_title(project_key: str, issue_ids: list[str]) -> str:
     return f"batch-mtu {project_key} {preview}{suffix}"
 
 
+def base64url_encode(value: str) -> str:
+    return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def build_open_web(base_url: str, directory: str, session_id: str) -> str:
+    parsed = urlparse(base_url)
+    encoded_directory = base64url_encode(directory)
+    path = f"/{encoded_directory}/session/{quote(session_id, safe='')}"
+    query = urlencode({"directory": directory})
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", query, ""))
+
+
+def build_session_command(session_id: str) -> str:
+    return f"pmgr session {session_id}"
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -189,7 +216,9 @@ def main() -> int:
             {
                 "mode": "execute",
                 "directory": directory,
+                "open_web": build_open_web(args.opencode_base_url, directory, session_id),
                 "session_id": session_id,
+                "session_command": build_session_command(session_id),
                 "send_message_result": send_payload,
                 "run_shell_result": shell_payload,
             }

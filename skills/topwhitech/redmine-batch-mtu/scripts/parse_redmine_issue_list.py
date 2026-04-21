@@ -11,6 +11,12 @@ from urllib.parse import parse_qs, urlparse
 
 URL_PATTERN = re.compile(r"https://apredmine\.topwhitech\.com/projects/[^\s\]\<]+/issues\?[^\s\]\<]+")
 PROJECT_PATTERN = re.compile(r"/projects/(?P<project>[^/]+)/issues")
+REQUIRED_PREFIX = "mtu:"
+BUILD_REMINDER = """<system-reminder>
+Your operational mode has changed from plan to build.
+You are no longer in read-only mode.
+You are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.
+</system-reminder>"""
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +35,19 @@ def read_input(args: argparse.Namespace) -> str:
         with open(args.input_file, "r", encoding="utf-8") as handle:
             return handle.read()
     raise ValueError("input-text or input-file is required")
+
+
+def normalize_text(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def validate_trigger(raw: str) -> str:
+    normalized = normalize_text(raw)
+    if not normalized.lstrip().startswith(REQUIRED_PREFIX):
+        raise ValueError("Missing required trigger prefix: mtu:")
+    if BUILD_REMINDER not in normalized:
+        raise ValueError("Missing required build-mode system reminder")
+    return normalized
 
 
 def extract_single_url(raw: str) -> str:
@@ -61,7 +80,7 @@ def parse_issue_ids(query: dict[str, list[str]]) -> list[str]:
 
 
 def parse_url(raw: str) -> dict[str, object]:
-    url = extract_single_url(raw)
+    url = extract_single_url(validate_trigger(raw))
     parsed = urlparse(url)
     match = PROJECT_PATTERN.search(parsed.path)
     if not match:

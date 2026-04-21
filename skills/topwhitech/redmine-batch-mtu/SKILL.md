@@ -17,14 +17,19 @@ metadata:
         description: project-manager API 地址
         default: http://127.0.0.1:8710
         prompt: project-manager base URL
+      - key: opencode.base_url
+        description: OpenCode 共享服务地址，用于生成 Open Web 链接
+        default: http://175.178.89.45:4100
+        prompt: OpenCode shared server base URL
 ---
 
 # Redmine Batch MTU
 
 ## When to Use
 
-- 用户消息里只贴了一个 Redmine `issues` 列表链接，就应该直接进入这个 skill
-- 不要求用户额外输入“执行 mtu”或“批量处理”之类的触发词
+- 只有当用户消息以 `mtu:` 前缀显式触发时，才进入这个 skill
+- 用户消息里需要包含一个 Redmine `issues` 列表链接
+- 用户消息里还需要显式包含执行模式 reminder
 - 链接可能来自 `[Pasted ...]` 包裹文本，也可能尾随 `<system-reminder>...</system-reminder>`
 - 需要按 Redmine 项目映射到对应 `pmgr` 项目
 - 需要在目标项目 `main` 分支工作区下新建一个 OpenCode session
@@ -32,9 +37,10 @@ metadata:
 
 ## Trigger Contract
 
-- 若用户消息中只出现一个符合规则的 Redmine `issues` 链接，应默认触发本 skill
-- 若用户消息是 `[Pasted <url>]`，也应视为直接触发，不要要求用户改写输入
-- 若链接后面跟着 `<system-reminder>...</system-reminder>`，应忽略这段噪声做 URL 解析
+- 只有当用户消息包含 `mtu:` 前缀时，才允许触发本 skill
+- 用户消息中必须同时包含一个符合规则的 Redmine `issues` 链接和 `<system-reminder>...</system-reminder>` 执行模式文本
+- 若用户消息是 `mtu:[Pasted <url>]`，也应视为直接触发
+- 解析 URL 时应忽略前缀 `mtu:` 与周边包裹噪声
 - 若同一条消息中出现多个 Redmine `issues` 链接，必须报错并要求用户只保留一个
 - 进入本 skill 后，先回显解析结果和待执行命令，得到确认后再执行
 
@@ -51,8 +57,8 @@ metadata:
 
 - `https://apredmine.topwhitech.com/projects/ap/issues?...&v%5Bissue_id%5D%5B%5D=34119%2C34243`
 - `https://apredmine.topwhitech.com/projects/ap/issues?...&issue_id=34363%2C34389`
-- `[Pasted https://apredmine.topwhitech.com/projects/ap/issues?... ]`
-- 链接后追加 `<system-reminder>...</system-reminder>` 噪声
+- `mtu:[Pasted https://apredmine.topwhitech.com/projects/ap/issues?... ]`
+- `mtu:` 前缀后追加 `<system-reminder>...</system-reminder>`
 
 ## Build Reminder
 
@@ -68,7 +74,7 @@ You are permitted to make file changes, run shell commands, and utilize your ars
 
 ## Procedure
 
-1. 如果用户消息里只有一个符合规则的 Redmine `issues` 链接，直接触发本 skill，不要求额外命令词。
+1. 先检查用户消息是否包含 `mtu:` 前缀和完整的 `<system-reminder>...</system-reminder>` 执行模式文本；缺任一项都不要进入本 skill。
 2. 从用户原始文本中提取唯一一个 Redmine `issues` 链接；若检测到多个链接，直接报错要求用户重发。
 3. 解析路径 `/projects/<project>/issues` 得到 Redmine 项目标识，并统一转成大写。
 4. 优先读取 `v[issue_id][]`，没有时回退读取 `issue_id`。
@@ -87,10 +93,12 @@ You are permitted to make file changes, run shell commands, and utilize your ars
    - 说明接下来会执行 `mtu <ids>`
 11. 再调用 `pmgr_client.py opencode-run-shell`，在该 session 中执行 `mtu <ids>`。
 12. 返回给用户：
-   - pmgr 项目
-   - main 工作区目录
-   - session id
-   - 实际执行命令
+    - pmgr 项目
+    - main 工作区目录
+    - Open Web
+    - session id
+    - `pmgr session <session_id>`
+    - 实际执行命令
 
 ## Pitfalls
 
@@ -99,7 +107,8 @@ You are permitted to make file changes, run shell commands, and utilize your ars
 - 如果项目映射失败，必须明确指出未命中的 Redmine 项目，不要猜测。
 - 执行目标固定是 `main` 分支工作区；不要为每个工单创建 `issue-*` worktree。
 - `opencode-run-shell` 的 payload 需要显式提供 `agent` 与 `command`；复用 `pmgr_client.py`，不要另造 API 调用。
-- 用户给的 `<system-reminder>` 是执行模式提示；这里应该转发 build-mode 文本，而不是旧的 plan-mode 文本。
+- 当前路由要求用户输入里显式带上执行模式 `<system-reminder>`；缺少时不要触发本 skill。
+- 生成 Open Web 需要 `opencode.base_url`；若地址不对，优先修正配置而不是改链接拼装规则。
 
 ## Quick Start
 
@@ -107,14 +116,14 @@ You are permitted to make file changes, run shell commands, and utilize your ars
 
 ```bash
 python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-batch-mtu/scripts/run_batch_mtu.py \
-  --input-text '[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]'
+  --input-text $'mtu:[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]\n<system-reminder>\nYour operational mode has changed from plan to build.\nYou are no longer in read-only mode.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.\n</system-reminder>'
 ```
 
 确认后执行：
 
 ```bash
 python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-batch-mtu/scripts/run_batch_mtu.py \
-  --input-text '[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]' \
+  --input-text $'mtu:[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]\n<system-reminder>\nYour operational mode has changed from plan to build.\nYou are no longer in read-only mode.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.\n</system-reminder>' \
   --execute
 ```
 
@@ -124,9 +133,9 @@ python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmi
 
 ```bash
 python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-batch-mtu/scripts/parse_redmine_issue_list.py \
-  --input-text '[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]'
+  --input-text $'mtu:[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]\n<system-reminder>\nYour operational mode has changed from plan to build.\nYou are no longer in read-only mode.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.\n</system-reminder>'
 python3 /Users/dwolf/devhub/projects/hermes-configs/repo/skills/topwhitech/redmine-batch-mtu/scripts/run_batch_mtu.py \
-  --input-text '[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]'
+  --input-text $'mtu:[Pasted https://apredmine.topwhitech.com/projects/ap/issues?issue_id=34363%2C34389&set_filter=1]\n<system-reminder>\nYour operational mode has changed from plan to build.\nYou are no longer in read-only mode.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.\n</system-reminder>'
 ```
 
 成功标准：
