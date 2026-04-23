@@ -70,16 +70,12 @@ metadata:
 3. 若参数格式不属于以上几类，回复 `参数格式不支持`。
 4. 如果参数是工单列表链接，则按链接里的 Redmine 项目走 `project_map.json` 映射。
 5. 如果参数是单工单链接、单工单号或工单号集合，默认走 `appoker`。
-6. 执行前先向用户回显：
-   - Redmine 项目
-   - pmgr 项目
-   - 工单集合
-   - 待执行命令 `/mtu <ids>`
-7. 用户确认后，调用 `pmgr_client.py resolve-workspace --project <project> --source-branch main`，解析 main 分支工作区目录。
+6. 参数解析成功后，不需要再向用户确认，直接继续执行。
+7. 调用 `pmgr_client.py resolve-workspace --project <project> --source-branch main`，解析 main 分支工作区目录。
 8. 在该目录下调用 `pmgr_client.py opencode-create-session` 新建 session。
 9. 发送执行模式消息给 OpenCode，并说明接下来会执行 `/mtu <ids>`。
 10. 再调用 `pmgr_client.py opencode-run-shell`，在该 session 中执行 `/mtu <ids>`。
-11. 返回给用户：
+11. 执行后返回给用户：
     - pmgr 项目
     - main 工作区目录
     - Open Web
@@ -95,6 +91,7 @@ metadata:
 - `opencode-run-shell` 的 payload 需要显式提供 `agent` 与 `command`；复用 `pmgr_client.py`，不要另造 API 调用。
 - 单工单链接、单工单号和工单号集合都固定走 `appoker`；只有列表链接才按 Redmine 项目映射。
 - 生成 Open Web 需要 `opencode.base_url`；若地址不对，优先修正配置而不是改链接拼装规则。
+- 当前默认流程是“解析成功后直接执行”，不是“先分析再人工确认”。若只想看命令预览，应显式使用脚本的非 `--execute` 模式做调试。
 
 ## Quick Start
 
